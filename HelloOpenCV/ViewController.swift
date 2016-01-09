@@ -42,57 +42,45 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         
         // デバイス一覧の取得.
-        let devices = AVCaptureDevice.devices()
-        
-        // バックカメラをmyDeviceに格納.
-        for device in devices {
-            if(device.position == AVCaptureDevicePosition.Back){
-                myDevice = device as! AVCaptureDevice
-            }
-        }
-        if myDevice == nil {
-            return false
-        }
-        
-        // バックカメラからVideoInputを取得.
-        let myInput: AVCaptureDeviceInput?
-        do {
-            try myInput = AVCaptureDeviceInput(device: myDevice)
-        } catch is NSError {
-            return false
-        }
-        
-        
-        // セッションに追加.
-        if mySession.canAddInput(myInput) {
-            mySession.addInput(myInput)
+        if let device = findCamera(AVCaptureDevicePosition.Back) {
+            myDevice = device
         } else {
+            print("カメラが見つかりませんでした")
             return false
         }
         
-        // 出力先を設定
-        myOutput = AVCaptureVideoDataOutput()
-        myOutput.videoSettings = [ kCVPixelBufferPixelFormatTypeKey: Int(kCVPixelFormatType_32BGRA) ]
-        
-        // FPSを設定
-        var lockError: NSError?
         do {
+            // バックカメラからVideoInputを取得.
+            let myInput: AVCaptureDeviceInput?
+            try myInput = AVCaptureDeviceInput(device: myDevice)
+
+            // セッションに追加.
+            if mySession.canAddInput(myInput) {
+                mySession.addInput(myInput)
+            } else {
+                return false
+            }
+
+            // 出力先を設定
+            myOutput = AVCaptureVideoDataOutput()
+            myOutput.videoSettings = [ kCVPixelBufferPixelFormatTypeKey: Int(kCVPixelFormatType_32BGRA) ]
+
+            // FPSを設定
             try myDevice.lockForConfiguration()
             myDevice.activeVideoMinFrameDuration = CMTimeMake(1, 15)
             myDevice.unlockForConfiguration()
-        } catch is NSError {
-//            print("lock error: \(error.localizedDescription)")
+
+            // デリゲートを設定
+            let queue: dispatch_queue_t = dispatch_queue_create("myqueue",  nil)
+            myOutput.setSampleBufferDelegate(self, queue: queue)
+
+            // 遅れてきたフレームは無視する
+            myOutput.alwaysDiscardsLateVideoFrames = true
+
+        } catch let error as NSError {
+            print(error)
             return false
-            
         }
-        
-        // デリゲートを設定
-        let queue: dispatch_queue_t = dispatch_queue_create("myqueue",  nil)
-        myOutput.setSampleBufferDelegate(self, queue: queue)
-        
-        
-        // 遅れてきたフレームは無視する
-        myOutput.alwaysDiscardsLateVideoFrames = true
         
         
         // セッションに追加.
@@ -113,6 +101,16 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         return true
     }
+
+    // 指定位置のカメラを探します
+    func findCamera(position: AVCaptureDevicePosition) -> AVCaptureDevice? {
+        for device in AVCaptureDevice.devices() {
+            if(device.position == position){
+                return device as? AVCaptureDevice
+            }
+        }
+        return nil
+    }
     
     
     // 毎フレーム実行される処理
@@ -132,7 +130,6 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
-        // Dispose of any resources that can be recreated.
     }
 
 
